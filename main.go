@@ -75,7 +75,7 @@ func producer(wg *sync.WaitGroup, proNum int) {
 				item := len(buffer) + 1
 				buffer = append(buffer, item)
 				show.Set(fmt.Sprintf("Producer(%d) produces item(%d)", i, item))
-				percentage.Set(float64(item-1) / float64(BufferSize))
+				percentage.Set(float64(item) / float64(BufferSize))
 				cond.Signal()
 				mutex.Unlock()
 			}
@@ -98,7 +98,7 @@ func consumer(wg *sync.WaitGroup, conNum int) {
 				item := len(buffer)
 				buffer = buffer[0 : item-1]
 				show.Set(fmt.Sprintf("Consumer(%d) consumes item(%d)", i, item))
-				percentage.Set(float64(item) / float64(BufferSize))
+				percentage.Set(float64(item-1) / float64(BufferSize))
 				cond.Signal()
 				mutex.Unlock()
 			}
