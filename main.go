@@ -33,7 +33,7 @@ func begin() {
 	doneMutex.Lock()
 	done = false
 	doneMutex.Unlock()
-	str, err := proNumStr.Get()
+	str, err := proNumStr.Get() //获得生产者数量
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -43,7 +43,7 @@ func begin() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
-	str, err = conNumStr.Get()
+	str, err = conNumStr.Get() //获得消费者数量
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -54,7 +54,7 @@ func begin() {
 		os.Exit(1)
 	}
 	wg.Add(2)
-	go producer(&wg, proNum)
+	go producer(&wg, proNum) //启动生产者和消费者进程
 	go consumer(&wg, conNum)
 	wg.Wait()
 	fmt.Printf("All Done\n")
@@ -62,22 +62,23 @@ func begin() {
 
 func producer(wg *sync.WaitGroup, proNum int) {
 	defer wg.Done()
+	//启动生产者协程
 	for i := 0; i < proNum; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			for !done {
-				mutex.Lock()
-				for len(buffer) == BufferSize {
+				mutex.Lock()                    //获取锁
+				for len(buffer) == BufferSize { //缓冲区满时堵塞
 					cond.Wait()
 				}
 				time.Sleep(1 * time.Second)
 				item := len(buffer) + 1
 				buffer = append(buffer, item)
-				show.Set(fmt.Sprintf("Producer(%d) produces item(%d)", i, item))
-				percentage.Set(float64(item) / float64(BufferSize))
+				show.Set(fmt.Sprintf("Producer(%d) produces item(%d)", i, item)) //设置展示标签
+				percentage.Set(float64(item) / float64(BufferSize))              //设置进度条百分比
 				cond.Signal()
-				mutex.Unlock()
+				mutex.Unlock() //释放锁
 			}
 		}(i)
 	}
@@ -91,7 +92,7 @@ func consumer(wg *sync.WaitGroup, conNum int) {
 			defer wg.Done()
 			for !done {
 				mutex.Lock()
-				for len(buffer) == 0 {
+				for len(buffer) == 0 { //缓冲区空时堵塞
 					cond.Wait()
 				}
 				time.Sleep(1 * time.Second)
@@ -115,13 +116,13 @@ func main() {
 	show = binding.NewString()
 	inputProLabel := widget.NewLabel("Enter the number of producers")
 	inputConLabel := widget.NewLabel("Enter the number of consumers")
-	inputLabelContainer := container.New(layout.NewHBoxLayout(), inputProLabel, layout.NewSpacer(), inputConLabel)
+	inputLabelContainer := container.New(layout.NewHBoxLayout(), inputProLabel, layout.NewSpacer(), inputConLabel) //生产者消费者输入提示容器
 	inputProNum := widget.NewEntryWithData(proNumStr)
 	inputConNum := widget.NewEntryWithData(conNumStr)
-	inputBoxContainer := container.New(layout.NewHBoxLayout(), inputProNum, layout.NewSpacer(), inputConNum)
+	inputBoxContainer := container.New(layout.NewHBoxLayout(), inputProNum, layout.NewSpacer(), inputConNum) //生产者消费者输入框容器
 	showLabel := widget.NewLabelWithData(show)
-	showLabelContainer := container.New(layout.NewHBoxLayout(), layout.NewSpacer(), showLabel, layout.NewSpacer())
-	showBufferContainer := container.New(layout.NewHBoxLayout())
+	showLabelContainer := container.New(layout.NewHBoxLayout(), layout.NewSpacer(), showLabel, layout.NewSpacer()) //展示标签容器
+	showBufferContainer := container.New(layout.NewHBoxLayout())                                                   //缓冲区内容展示容器哦
 	grids := make([]*widget.Label, 20)
 	for i := 0; i < BufferSize; i++ {
 		grids[i] = widget.NewLabel(strconv.Itoa(i + 1))
@@ -132,9 +133,9 @@ func main() {
 	percentage = binding.NewFloat()
 	percentage.Set(float64(len(buffer)) / float64(BufferSize))
 	progressBar := widget.NewProgressBarWithData(percentage)
-	progressBarContainer := container.New(layout.NewMaxLayout(), progressBar)
+	progressBarContainer := container.New(layout.NewMaxLayout(), progressBar) //进度条容器
 	startButton := widget.NewButton("Start", begin)
-	buttonContainer := container.New(layout.NewHBoxLayout(), layout.NewSpacer(), startButton, layout.NewSpacer())
+	buttonContainer := container.New(layout.NewHBoxLayout(), layout.NewSpacer(), startButton, layout.NewSpacer()) //开始按钮容器
 	allContainer := container.New(layout.NewVBoxLayout(), inputLabelContainer, inputBoxContainer, showLabelContainer, showBufferContainer, progressBarContainer, buttonContainer)
 	window.SetContent(allContainer)
 	window.ShowAndRun()
