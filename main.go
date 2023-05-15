@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -43,6 +44,7 @@ func begin() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println(proNum)
 	str, err = conNumStr.Get() //获得消费者数量
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -53,11 +55,24 @@ func begin() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println(conNum)
 	wg.Add(2)
 	go producer(&wg, proNum) //启动生产者和消费者进程
 	go consumer(&wg, conNum)
 	wg.Wait()
 	fmt.Printf("All Done\n")
+}
+
+
+func end(){
+	doneMutex.Lock()
+	done=true
+	fmt.Println(done)
+	doneMutex.Unlock()
+	mutex.Lock()
+	buffer=buffer[:0]
+	percentage.Set(float64(len(buffer))/float64(BufferSize))
+	mutex.Unlock()
 }
 
 func producer(wg *sync.WaitGroup, proNum int) {
@@ -71,6 +86,12 @@ func producer(wg *sync.WaitGroup, proNum int) {
 				mutex.Lock()                    //获取锁
 				for len(buffer) == BufferSize { //缓冲区满时堵塞
 					cond.Wait()
+				}
+				if done {
+					mutex.Unlock()
+					cond.Signal()
+					fmt.Printf("Producer(%d) will be done\n",i)
+					break
 				}
 				time.Sleep(1 * time.Second)
 				item := len(buffer) + 1
@@ -92,8 +113,19 @@ func consumer(wg *sync.WaitGroup, conNum int) {
 			defer wg.Done()
 			for !done {
 				mutex.Lock()
+				if done{
+					mutex.Unlock()
+					fmt.Printf("Consumer(%d) will be done\n",i)
+					break
+				}
 				for len(buffer) == 0 { //缓冲区空时堵塞
 					cond.Wait()
+				}
+				if done {
+					mutex.Unlock()
+					cond.Signal()
+					fmt.Printf("Producer(%d) will be done\n",i)
+					break
 				}
 				time.Sleep(1 * time.Second)
 				item := len(buffer)
@@ -105,11 +137,18 @@ func consumer(wg *sync.WaitGroup, conNum int) {
 			}
 		}(i)
 	}
-	wg.Done()
+}
+
+func entry(){
+	wg.Add(1)
+	go begin()
 }
 
 func main() {
 	myApp := app.New()
+	lightTheme:=theme.LightTheme()
+	darkTheme:=theme.DarkTheme()
+	myApp.Settings().SetTheme(lightTheme)
 	window := myApp.NewWindow("producer-consumer")
 	proNumStr = binding.NewString()
 	conNumStr = binding.NewString()
@@ -134,8 +173,16 @@ func main() {
 	percentage.Set(float64(len(buffer)) / float64(BufferSize))
 	progressBar := widget.NewProgressBarWithData(percentage)
 	progressBarContainer := container.New(layout.NewMaxLayout(), progressBar) //进度条容器
-	startButton := widget.NewButton("Start", begin)
-	buttonContainer := container.New(layout.NewHBoxLayout(), layout.NewSpacer(), startButton, layout.NewSpacer()) //开始按钮容器
+	startButton := widget.NewButton("Start", entry)
+	themeButton := widget.NewButton("Switch Theme", func(){
+		if myApp.Settings().Theme()==lightTheme{
+			myApp.Settings().SetTheme(darkTheme)
+		}else{
+			myApp.Settings().SetTheme(lightTheme)
+		}
+	})
+	endButton:=widget.NewButton("End",end)
+	buttonContainer := container.New(layout.NewHBoxLayout(), startButton, endButton,layout.NewSpacer(),themeButton) //按钮容器
 	allContainer := container.New(layout.NewVBoxLayout(), inputLabelContainer, inputBoxContainer, showLabelContainer, showBufferContainer, progressBarContainer, buttonContainer)
 	window.SetContent(allContainer)
 	window.ShowAndRun()
